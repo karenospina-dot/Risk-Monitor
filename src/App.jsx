@@ -9,18 +9,36 @@ const SHEETS_CSV_URL =
   "/pub?output=csv";
 
 const C = {
-  pais:0, equipo:1, proceso:2, tipoWhatIf:3, refOrigen:4,
-  refNorm:5, escenario:6, tipoExp:7, consecuencias:8,
-  monetario:9, prob:10, impacto:11, nivelCalc:12,
-  clasificacion:13, control:14, kpi:15, mejora:16,
-  responsable:17, formaControl:18, fechaRev:19,
-  cambioCtx:20, observaciones:21,
+  pais:0, sociedad:1, equipo:2, proceso:3, tipoWhatIf:4,
+  refOrigen:5, refNorm:6, escenario:7, riesgo:8,
+  tipoExp:9, consecuencias:10, monetario:11,
+  prob:12, impacto:13, nivelCalc:14,
+  clasificacion:15, control:16, kpi:17, mejora:18,
+  responsable:19, formaControl:20, fechaRev:21,
+  cambioCtx:22, observaciones:23, reevaluacion:24,
 };
 
 // Fields to translate (key in risk object → label for translation)
 const TRANSLATE_FIELDS = [
   "escenario","proceso","equipo","tipoExp","consecuencias",
   "refNorm","control","kpi","mejora","cambioCtx","observaciones","area",
+];
+
+/* ─────────────────────────────────────────────────────────────────────────────
+   SOCIETIES — fixed list, independent of Sheets data
+───────────────────────────────────────────────────────────────────────────── */
+const SOCIETIES = [
+  "Soluciones Alegra S.A.S",
+  "Alanube Soluciones S.R.L",
+  "Alegra CAN LP",
+  "Alegra Contabilidad S.A. con C.V.",
+  "Alegra Holdings S.A.S",
+  "Alanube SAC",
+  "Alegra Soluciones SL",
+  "Alero Global S.A.S",
+  "Alanube Soluciones SRL",
+  "Alanube Soluciones SA",
+  "Alanube SAU",
 ];
 
 /* ─────────────────────────────────────────────────────────────────────────────
@@ -75,7 +93,7 @@ const I18N = {
     reg:{
       title:"Registro de Riesgos",
       sub:(n)=>`${n} riesgos · ordenar por columna · clic en fila para ficha completa`,
-      cols:{ id:"ID", country:"País", scenario:"Escenario", team:"Equipo",
+      cols:{ id:"ID", country:"País", scenario:"Riesgo", team:"Equipo",
              score:"Score", level:"Nivel", control:"Control",
              gross:"Bruta", net:"Residual", owner:"Responsable" },
       of:"de", risks:"riesgos",
@@ -148,7 +166,7 @@ const I18N = {
     reg:{
       title:"Risk Registry",
       sub:(n)=>`${n} risks · click header to sort · click row for full detail`,
-      cols:{ id:"ID", country:"Country", scenario:"Scenario", team:"Team",
+      cols:{ id:"ID", country:"Country", scenario:"Risk", team:"Team",
              score:"Score", level:"Level", control:"Control",
              gross:"Gross", net:"Residual", owner:"Owner" },
       of:"of", risks:"risks",
@@ -293,9 +311,11 @@ function rowToRisk(row,idx){
   return{
     id:`R${String(idx+1).padStart(2,"0")}`,
     pais:(row[C.pais]||"").trim(),
+    sociedad:(row[C.sociedad]||"").trim(),
     equipo:(row[C.equipo]||"General").split("/")[0].trim().slice(0,30),
     proceso:(row[C.proceso]||"").trim(),
-    escenario:(row[C.escenario]||row[C.proceso]||"").trim(),
+    escenario:(row[C.escenario]||"").trim(),
+    riesgo:(row[C.riesgo]||"").trim(),
     tipoExp:(row[C.tipoExp]||"").trim(),
     consecuencias:(row[C.consecuencias]||"").trim(),
     refNorm:(row[C.refNorm]||"").trim(),
@@ -417,14 +437,23 @@ function TranslationBanner({state,t}) {
 function LoadingScreen(){
   return(
     <div style={{minHeight:"100vh",display:"flex",flexDirection:"column",
-      alignItems:"center",justifyContent:"center",gap:18,background:"#F9FAFB"}}>
-      <div style={{width:36,height:36,border:"3px solid #E5E7EB",
-        borderTop:"3px solid #1D4ED8",borderRadius:"50%",
-        animation:"spin .8s linear infinite"}}/>
-      <style>{`@keyframes spin{to{transform:rotate(360deg)}}`}</style>
-      <p style={{fontWeight:600,color:"#374151",fontSize:14,margin:0}}>
-        Cargando desde Google Sheets…
-      </p>
+      alignItems:"center",justifyContent:"center",gap:20,background:"#F9FAFB"}}>
+      <style>{`
+        @keyframes dot-bounce {
+          0%,80%,100%{transform:scale(0.6);opacity:0.3}
+          40%{transform:scale(1);opacity:1}
+        }
+      `}</style>
+      <div style={{display:"flex",gap:8,alignItems:"center"}}>
+        {[0,1,2].map(i=>(
+          <div key={i} style={{
+            width:12,height:12,borderRadius:"50%",
+            background:"#00C4B4",
+            animation:"dot-bounce 1.2s ease-in-out infinite",
+            animationDelay:`${i*0.2}s`
+          }}/>
+        ))}
+      </div>
     </div>
   );
 }
@@ -470,8 +499,13 @@ function Drawer({risk,onClose,t}){
               </div>
               <h2 style={{margin:0,fontSize:17,fontWeight:700,color:"#111827",
                 lineHeight:1.4,fontFamily:"'Playfair Display',Georgia,serif"}}>
-                {risk.escenario||risk.proceso}
+                {risk.riesgo||risk.escenario||risk.proceso}
               </h2>
+              {risk.escenario&&risk.riesgo&&risk.escenario!==risk.riesgo&&(
+                <p style={{margin:"6px 0 0",fontSize:12.5,color:"#6B7280",lineHeight:1.6}}>
+                  {risk.escenario}
+                </p>
+              )}
             </div>
             <button onClick={onClose} style={{width:30,height:30,borderRadius:7,
               background:"rgba(0,0,0,0.06)",border:"none",cursor:"pointer",
@@ -587,7 +621,7 @@ function CellModal({cellKey,risks,onClose,onSelectRisk,t}){
                   <div style={{flex:1,minWidth:0}}>
                     <div style={{fontSize:13.5,fontWeight:600,color:"#111827",
                       lineHeight:1.35,marginBottom:3}}>
-                      {r.escenario||r.proceso}
+                      {r.riesgo||r.escenario||r.proceso}
                     </div>
                     <div style={{display:"flex",gap:8,fontSize:11.5,
                       color:"#6B7280",flexWrap:"wrap",alignItems:"center"}}>
@@ -819,7 +853,7 @@ function Overview({risks,onSelect,t}){
                 <div style={{flex:1,minWidth:0}}>
                   <div style={{fontSize:13.5,fontWeight:600,color:"#111827",
                     lineHeight:1.35,marginBottom:3}}>
-                    {r.escenario||r.proceso}
+                    {r.riesgo||r.escenario||r.proceso}
                   </div>
                   <div style={{fontSize:11.5,color:"#9CA3AF",display:"flex",
                     gap:10,flexWrap:"wrap"}}>
@@ -973,7 +1007,7 @@ function HeatMap({risks,onSelect,t}){
                   <div key={r.id} style={{display:"flex",gap:7,marginBottom:4,lineHeight:1.4}}>
                     <span style={{fontFamily:"monospace",fontSize:10,color:"#9CA3AF",flexShrink:0}}>{r.id}</span>
                     <span style={{color:"#E5E7EB",fontSize:11}}>
-                      {(r.escenario||r.proceso).slice(0,52)}{(r.escenario||r.proceso).length>52?"…":""}
+                      {(r.riesgo||r.escenario||r.proceso).slice(0,52)}{(r.riesgo||r.escenario||r.proceso).length>52?"…":""}
                     </span>
                   </div>
                 ))}
@@ -1232,8 +1266,8 @@ function Registros({risks,onSelect,t}){
                   <td style={{...T.td,maxWidth:220}}>
                     <div style={{fontWeight:500,color:"#111827",overflow:"hidden",
                       textOverflow:"ellipsis",whiteSpace:"nowrap",maxWidth:212}}
-                      title={r.escenario||r.proceso}>
-                      {r.escenario||r.proceso}
+                      title={r.riesgo||r.escenario||r.proceso}>
+                      {r.riesgo||r.escenario||r.proceso}
                     </div>
                   </td>
                   <td style={{...T.td,maxWidth:130}}>
@@ -1618,16 +1652,15 @@ export default function App(){
     }
   },[lang,risksES,txState,triggerTranslation]);
 
-  const paises=useMemo(()=>["Todos",...new Set(risks.map(r=>r.pais).filter(Boolean))],[risks]);
   const equipos=useMemo(()=>["Todos",...[...new Set(risks.map(r=>r.equipo).filter(Boolean))].sort()],[risks]);
 
   const filtered=useMemo(()=>risks.filter(r=>{
     if(fNivel!=="Todos"&&r.nivel!==fNivel)return false;
-    if(fPais !=="Todos"&&r.pais !==fPais) return false;
-    if(fEquipo!=="Todos"&&r.equipo!==fEquipo)return false;
+    if(fPais!=="Todos"&&!r.pais?.toLowerCase().includes(fPais.toLowerCase()))return false;
+    if(fEquipo!=="Todos"&&!r.equipo?.toLowerCase().includes(fEquipo.toLowerCase()))return false;
     if(search){
       const q=search.toLowerCase();
-      return[r.escenario,r.proceso,r.id,r.area,r.responsable,r.pais,r.equipo]
+      return[r.riesgo,r.escenario,r.proceso,r.id,r.area,r.responsable,r.pais,r.equipo]
         .some(f=>f?.toLowerCase().includes(q));
     }
     return true;
@@ -1698,15 +1731,40 @@ export default function App(){
             onChange={e=>setSearch(e.target.value)}
             style={{...iSt,width:148}}/>
           <select value={fNivel} onChange={e=>setFNivel(e.target.value)} style={iSt}>
-            {[allOpt,"ALTO","MEDIO","BAJO"].map(v=><option key={v}>{v}</option>)}
+            <option value="Todos">{lang==="es"?"Nivel":"Level"}</option>
+            {["ALTO","MEDIO","BAJO"].map(v=><option key={v}>{v}</option>)}
           </select>
           <select value={fEquipo} onChange={e=>setFEquipo(e.target.value)}
             style={{...iSt,maxWidth:134}}>
-            {equipos.map(p=><option key={p}>{p}</option>)}
+            <option value="Todos">{lang==="es"?"Equipo":"Team"}</option>
+            {equipos.filter(e=>e!=="Todos").map(p=><option key={p}>{p}</option>)}
           </select>
-          <select value={fPais} onChange={e=>setFPais(e.target.value)} style={iSt}>
-            {paises.map(p=><option key={p}>{p}</option>)}
+          <select value={fPais} onChange={e=>setFPais(e.target.value)}
+            style={{...iSt,maxWidth:200}}>
+            <option value="Todos">{lang==="es"?"Sociedad":"Society"}</option>
+            {SOCIETIES.map(s=><option key={s} value={s}>{s}</option>)}
           </select>
+
+          {/* Language toggle — visible before filters */}
+          <div style={{display:"flex",background:"#F0F0F0",borderRadius:8,
+            padding:3,flexShrink:0,gap:1,border:"1px solid #E5E7EB"}}>
+            {[["es","ES"],["en","EN"]].map(([l,code])=>(
+              <button key={l} onClick={()=>setLang(l)}
+                style={{display:"flex",alignItems:"center",gap:4,
+                  padding:"4px 12px",borderRadius:6,border:"none",
+                  cursor:"pointer",fontSize:12.5,fontWeight:700,
+                  fontFamily:"inherit",letterSpacing:"0.05em",
+                  background:lang===l?"#fff":"transparent",
+                  color:lang===l?"#00C4B4":"#9CA3AF",
+                  boxShadow:lang===l?"0 1px 3px rgba(0,0,0,0.12)":"none",
+                  transition:"all .15s"}}>
+                {code}
+              </button>
+            ))}
+          </div>
+
+          {/* Divider */}
+          <div style={{width:1,height:22,background:"#E5E7EB",flexShrink:0}}/>
 
           {/* Refresh */}
           <button onClick={load} title="Recargar datos"
@@ -1725,9 +1783,8 @@ export default function App(){
             <div style={{fontSize:10}}>{lastFetch}</div>
           </div>
 
-          {/* Language toggle */}
-          <div style={{display:"flex",background:"#F3F4F6",borderRadius:8,
-            padding:3,flexShrink:0,gap:2}}>
+          {/* (lang toggle moved above) */}
+          <div style={{display:"none"}}>
             {[["es","🇨🇴","ES"],["en","🇺🇸","EN"]].map(([l,flag,code])=>(
               <button key={l} onClick={()=>setLang(l)}
                 style={{display:"flex",alignItems:"center",gap:5,
