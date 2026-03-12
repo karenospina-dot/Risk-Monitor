@@ -367,7 +367,7 @@ const T={
   th:{padding:"9px 12px",fontSize:10.5,fontWeight:600,letterSpacing:"0.07em",
     textTransform:"uppercase",color:"#9CA3AF",textAlign:"left",
     borderBottom:"1px solid #E5E7EB",background:"#F9FAFB",whiteSpace:"nowrap"},
-  td:{padding:"11px 12px",borderBottom:"1px solid #F3F4F6",verticalAlign:"middle"},
+  td:{padding:"11px 12px",borderBottom:"1px solid #F3F4F6",verticalAlign:"top"},
 };
 
 /* ─────────────────────────────────────────────────────────────────────────────
@@ -663,6 +663,7 @@ function CellModal({cellKey,risks,onClose,onSelectRisk,t}){
 ───────────────────────────────────────────────────────────────────────────── */
 function Overview({risks,onSelect,t}){
   const ov=t.ov;
+  const [drillFilter,setDrillFilter]=useState(null); // {type:'nivel'|'equipo', value:string, label:string}
   const totalBruta=risks.reduce((s,r)=>s+r.monetario,0);
   const totalResidual=risks.reduce((s,r)=>s+r.residual,0);
   const reduccion=totalBruta>0?Math.round((1-totalResidual/totalBruta)*100):0;
@@ -730,8 +731,12 @@ function Overview({risks,onSelect,t}){
             const c=NK[n];
             const pct=count>0?Math.round((conControl/count)*100):0;
             return(
-              <div key={n} style={{border:`1px solid ${c.border}`,borderRadius:10,
-                padding:"16px 18px",background:c.light}}>
+              <div key={n} onClick={()=>setDrillFilter({type:'nivel',value:n,label:n})}
+                style={{border:`1px solid ${c.border}`,borderRadius:10,
+                padding:"16px 18px",background:c.light,cursor:"pointer",
+                transition:"box-shadow 0.15s,transform 0.1s"}}
+                onMouseEnter={e=>{e.currentTarget.style.boxShadow="0 4px 16px rgba(0,0,0,0.10)";e.currentTarget.style.transform="translateY(-1px)";}}
+                onMouseLeave={e=>{e.currentTarget.style.boxShadow="none";e.currentTarget.style.transform="none";}}>
                 <div style={{display:"flex",justifyContent:"space-between",
                   alignItems:"flex-start",marginBottom:14}}>
                   <div>
@@ -796,9 +801,12 @@ function Overview({risks,onSelect,t}){
             {equipos.map(e=>{
               const red=e.bruta>0?Math.round((1-e.residual/e.bruta)*100):0;
               return(
-                <tr key={e.equipo}>
+                <tr key={e.equipo} onClick={()=>setDrillFilter({type:'equipo',value:e.equipo,label:e.equipo})}
+                  style={{cursor:"pointer"}}
+                  onMouseEnter={ev=>ev.currentTarget.style.background="#F0F9FF"}
+                  onMouseLeave={ev=>ev.currentTarget.style.background="transparent"}>
                   <td style={T.td}>
-                    <span style={{fontWeight:600,color:"#111827"}}>{e.equipo}</span>
+                    <span style={{fontWeight:600,color:"#1D4ED8",textDecoration:"underline",textDecorationStyle:"dotted"}}>{e.equipo}</span>
                   </td>
                   {[[e.alto,"#B91C1C"],[e.medio,"#B45309"],[e.bajo,"#15803D"]].map(([v,c],i)=>(
                     <td key={i} style={T.td}>
@@ -879,6 +887,92 @@ function Overview({risks,onSelect,t}){
           })}
         </div>
       )}
+      {/* Drill-down modal */}
+      {drillFilter&&(()=>{
+        const filtered=risks.filter(r=>
+          drillFilter.type==='nivel'?r.nivel===drillFilter.value:
+          r.equipo===drillFilter.value
+        ).sort((a,b)=>b.score-a.score);
+        const title=drillFilter.type==='nivel'
+          ?`Riesgos ${drillFilter.label}`
+          :`Equipo ${drillFilter.label}`;
+        return(
+          <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.45)",
+            zIndex:900,display:"flex",alignItems:"center",justifyContent:"center",
+            padding:"24px 16px"}}
+            onClick={()=>setDrillFilter(null)}>
+            <div style={{background:"#fff",borderRadius:14,width:"100%",maxWidth:780,
+              maxHeight:"80vh",display:"flex",flexDirection:"column",
+              boxShadow:"0 20px 60px rgba(0,0,0,0.18)"}}
+              onClick={e=>e.stopPropagation()}>
+              {/* Modal header */}
+              <div style={{padding:"18px 24px",borderBottom:"1px solid #F3F4F6",
+                display:"flex",justifyContent:"space-between",alignItems:"center",flexShrink:0}}>
+                <div>
+                  <div style={{fontSize:14,fontWeight:700,color:"#111827"}}>{title}</div>
+                  <div style={{fontSize:12,color:"#9CA3AF",marginTop:2}}>
+                    {filtered.length} riesgo{filtered.length!==1?"s":""} · clic en fila para ficha completa
+                  </div>
+                </div>
+                <button onClick={()=>setDrillFilter(null)}
+                  style={{width:28,height:28,borderRadius:6,border:"1px solid #E5E7EB",
+                    background:"#F9FAFB",cursor:"pointer",fontSize:14,color:"#6B7280",
+                    display:"flex",alignItems:"center",justifyContent:"center"}}>✕</button>
+              </div>
+              {/* Modal body */}
+              <div style={{overflowY:"auto",padding:"8px 24px 20px"}}>
+                {filtered.map(r=>{
+                  const c=NK[r.nivel]||NK.BAJO;
+                  const cc=r.cobertura>=60?"#15803D":r.cobertura>=40?"#B45309":"#B91C1C";
+                  return(
+                    <div key={r.id}
+                      onClick={()=>{setDrillFilter(null);onSelect(r);}}
+                      style={{display:"flex",gap:14,alignItems:"flex-start",
+                        padding:"14px 0",borderBottom:"1px solid #F9FAFB",
+                        cursor:"pointer"}}
+                      onMouseEnter={e=>e.currentTarget.style.background="#F9FAFB"}
+                      onMouseLeave={e=>e.currentTarget.style.background="transparent"}>
+                      {/* Score badge */}
+                      <div style={{width:42,height:42,borderRadius:9,
+                        background:c.light,border:`1px solid ${c.border}`,
+                        display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>
+                        <Num v={r.score} size={18} color={c.color}/>
+                      </div>
+                      {/* Main info */}
+                      <div style={{flex:1,minWidth:0}}>
+                        <div style={{fontSize:13,fontWeight:600,color:"#111827",
+                          lineHeight:1.4,marginBottom:4}}>
+                          {r.riesgo||r.escenario||r.proceso}
+                        </div>
+                        <div style={{display:"flex",gap:8,flexWrap:"wrap",alignItems:"center"}}>
+                          <span style={{fontFamily:"monospace",fontSize:11,color:"#9CA3AF"}}>{r.id}</span>
+                          <Badge nivel={r.nivel} t={t}/>
+                          <span style={{fontSize:11.5,color:"#6B7280"}}>{r.equipo}</span>
+                          <span style={{color:"#D1D5DB"}}>·</span>
+                          <span style={{fontSize:11.5,color:"#6B7280"}}>{r.pais}</span>
+                        </div>
+                      </div>
+                      {/* Financials */}
+                      <div style={{display:"flex",gap:16,alignItems:"center",flexShrink:0,textAlign:"right"}}>
+                        <div>
+                          <div style={{fontSize:10.5,color:"#9CA3AF"}}>Bruta</div>
+                          <div style={{fontSize:12.5,color:"#374151",fontWeight:500}}>{fmtM(r.monetario)}</div>
+                        </div>
+                        <div>
+                          <div style={{fontSize:10.5,color:"#9CA3AF"}}>Residual</div>
+                          <div style={{fontSize:12.5,fontWeight:700,color:cc}}>{fmtM(r.residual)}</div>
+                        </div>
+                        <CovDot pct={r.cobertura} t={t}/>
+                        <span style={{color:"#D1D5DB",fontSize:13}}>→</span>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          </div>
+        );
+      })()}
     </div>
   );
 }
@@ -1250,7 +1344,6 @@ function Registros({risks,onSelect,t}){
               <SortTh col="cobertura">{rg.cols.control}</SortTh>
               <SortTh col="monetario">{rg.cols.gross}</SortTh>
               <SortTh col="residual">{rg.cols.net}</SortTh>
-              <th style={T.th}>{rg.cols.owner}</th>
             </tr>
           </thead>
           <tbody>
@@ -1263,16 +1356,15 @@ function Registros({risks,onSelect,t}){
                   onMouseLeave={e=>e.currentTarget.style.background="transparent"}>
                   <td style={T.td}><span style={{fontFamily:"monospace",fontSize:11.5,color:"#9CA3AF"}}>{r.id}</span></td>
                   <td style={T.td}><span style={{fontSize:12.5,color:"#6B7280"}}>{r.pais}</span></td>
-                  <td style={{...T.td,maxWidth:220}}>
-                    <div style={{fontWeight:500,color:"#111827",overflow:"hidden",
-                      textOverflow:"ellipsis",whiteSpace:"nowrap",maxWidth:212}}
-                      title={r.riesgo||r.escenario||r.proceso}>
+                  <td style={{...T.td,minWidth:320,maxWidth:520}}>
+                    <div style={{fontWeight:500,color:"#111827",lineHeight:1.45,
+                      whiteSpace:"normal",wordBreak:"break-word"}}>
                       {r.riesgo||r.escenario||r.proceso}
                     </div>
                   </td>
-                  <td style={{...T.td,maxWidth:130}}>
+                  <td style={{...T.td,maxWidth:120}}>
                     <div style={{fontSize:12.5,color:"#6B7280",overflow:"hidden",
-                      textOverflow:"ellipsis",whiteSpace:"nowrap",maxWidth:124}}>
+                      textOverflow:"ellipsis",whiteSpace:"nowrap",maxWidth:112}}>
                       {r.equipo}
                     </div>
                   </td>
@@ -1281,12 +1373,7 @@ function Registros({risks,onSelect,t}){
                   <td style={T.td}><CovDot pct={r.cobertura} t={t}/></td>
                   <td style={T.td}><span style={{fontSize:13,color:"#6B7280"}}>{fmtM(r.monetario)}</span></td>
                   <td style={T.td}><span style={{fontSize:13,fontWeight:600,color:cc}}>{fmtM(r.residual)}</span></td>
-                  <td style={{...T.td,maxWidth:140}}>
-                    <div style={{fontSize:12.5,color:"#6B7280",overflow:"hidden",
-                      textOverflow:"ellipsis",whiteSpace:"nowrap",maxWidth:132}}>
-                      {r.responsable}
-                    </div>
-                  </td>
+
                 </tr>
               );
             })}
